@@ -1,0 +1,1 @@
+"""Standalone Wand patcher implementation."""
