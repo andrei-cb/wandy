@@ -16,7 +16,8 @@ from pathlib import Path
 
 from .asar import ArchiveSlice, rewrite_archive
 from .js import PatchError
-from .pe_patch import apply_fuse, matches_original_executable, neutralize_auxiliary, restore_fuse
+from .pe_patch import (apply_fuse, matches_original_executable, neutralize_auxiliary,
+                       patch_asar_integrity_resource, restore_asar_integrity_resource, restore_fuse)
 
 
 OWNER = "wand-enhancer-python"
@@ -65,6 +66,10 @@ class Install:
     @property
     def fuse_backup(self) -> Path:
         return Path(str(self.executable) + ".fusebak")
+
+    @property
+    def asar_hash_backup(self) -> Path:
+        return Path(str(self.executable) + ".asarhashbak")
 
     @property
     def stub_backup(self) -> Path:
@@ -119,7 +124,8 @@ def _require_closed() -> None:
 def _foreign_footprints(install: Install) -> list[Path]:
     return [path for path in (
         install.asar_backup, install.unpacked_backup, install.marker,
-        install.fuse_backup, install.stub_backup,
+        install.fuse_backup, install.asar_hash_backup, install.stub_backup,
+        Path(str(install.asar_hash_backup) + ".building"),
         install.root.parent / "enhancer.json", install.root / "version.dll",
         Path(str(install.asar) + ".building"),
         Path(str(install.asar_backup) + ".building"),
@@ -235,20 +241,23 @@ def _restore_originals(install: Install, manifest: dict) -> None:
     if not install.asar_backup.is_file() or not install.unpacked_backup.is_dir():
         raise PatchError("Python backup is incomplete; original files were not changed by this operation")
     if not matches_original_executable(install.executable, manifest["original_exe_sha256"]):
-        raise PatchError("Wand executable changed since backup; refusing to restore its fuse byte")
-    logger.info("Restoring Electron fuse byte, if changed")
-    restore_fuse(install.executable)
+        raise PatchError("Wand executable changed since backup; refusing to restore its integrity edits")
     logger.info("Restoring %s", install.asar)
     _replace_file_from_backup(install.asar_backup, install.asar)
     logger.info("Restoring %s", install.unpacked)
     _replace_directory_from_backup(install.unpacked_backup, install.unpacked)
+    logger.info("Restoring ASAR integrity resource hash, if changed")
+    restore_asar_integrity_resource(install.executable)
+    logger.info("Restoring Electron fuse byte, if changed")
+    restore_fuse(install.executable)
 
 
 def _delete_state(install: Install) -> None:
     for path in (Path(str(install.asar_backup) + ".building"),
                  Path(str(install.unpacked_backup) + ".building"),
                  Path(str(install.manifest) + ".building"),
-                 Path(str(install.asar) + ".building")):
+                 Path(str(install.asar) + ".building"),
+                 Path(str(install.asar_hash_backup) + ".building")):
         if path.is_file():
             path.unlink()
     if install.unpacked_backup.is_dir():
@@ -325,7 +334,8 @@ def patch(install: Install, selected: set[str]) -> None:
         _write_manifest(install, manifest)
         live_changed = True
         if not first_patch:
-            logger.info("Restoring original fuse byte before re-patching")
+            logger.info("Restoring original executable integrity edits before re-patching")
+        restore_asar_integrity_resource(install.executable)
         restore_fuse(install.executable)
         logger.info("Preparing app.asar.unpacked from its pristine backup")
         _replace_directory_from_backup(install.unpacked_backup, install.unpacked)
@@ -352,6 +362,8 @@ def patch(install: Install, selected: set[str]) -> None:
         os.replace(staged, install.asar)
         logger.info("Clearing Electron ASAR integrity fuse")
         apply_fuse(install.executable)
+        logger.info("Synchronizing executable ASAR integrity resource with patched app.asar")
+        patch_asar_integrity_resource(install.executable, install.asar)
         manifest["state"] = "patched"
         manifest["patches"] = sorted(selected)
         manifest["patched_exe_sha256"] = _hash_file(install.executable)
@@ -395,7 +407,7 @@ def restore(install: Install) -> None:
     logger.info("Python patch state: %s", manifest["state"])
     if manifest["state"] not in ("preparing", "restored") \
             and not matches_original_executable(install.executable, manifest["original_exe_sha256"]):
-        raise PatchError("Wand executable changed since Python patched it; fuse backup cannot be applied safely")
+        raise PatchError("Wand executable changed since Python patched it; integrity backups cannot be applied safely")
     if manifest["state"] in ("patched", "failed"):
         manifest["state"] = "restoring"
         _write_manifest(install, manifest)

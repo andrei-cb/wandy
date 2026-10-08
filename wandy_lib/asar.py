@@ -21,6 +21,23 @@ COPY_SIZE = 1024 * 1024
 MAX_HEADER_SIZE = 128 * 1024 * 1024
 
 
+def header_hash(path: Path) -> str:
+    """Hash the raw ASAR JSON header, excluding pickle fields, padding and file data."""
+    with path.open("rb") as stream:
+        prefix = stream.read(16)
+        if len(prefix) != 16:
+            raise PatchError("ASAR header is truncated")
+        sentinel, pickle_size, payload_size, json_size = struct.unpack("<IIII", prefix)
+        if (sentinel != 4 or not 8 <= pickle_size <= MAX_HEADER_SIZE
+                or payload_size != pickle_size - 4 or json_size > pickle_size - 8
+                or 8 + pickle_size > path.stat().st_size):
+            raise PatchError("ASAR header is invalid")
+        header = stream.read(json_size)
+        if len(header) != json_size:
+            raise PatchError("ASAR JSON header is truncated")
+    return hashlib.sha256(header).hexdigest()
+
+
 @dataclass
 class Archive:
     path: Path

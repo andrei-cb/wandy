@@ -1,6 +1,6 @@
 # Python Wand patcher
 
-This patches alocal Wand/WeMod installation on Windows with Python 3.11 or newer. 
+This patches a local Wand/WeMod installation on Windows with Python 3.11 or newer.
 It provides Pro activation, update-check suppression, and F12 DevTools. 
 It uses the static strategy; it does not replace Wand's launcher, 
 inject the remote panel, or automatically reapply patches after an update.
@@ -33,14 +33,15 @@ python wandy.py restore --install "C:\Users\you\AppData\Local\Wand\app-1.2.3"
 options are selected. Run `patch` again to change the selection; it rebuilds
 from the pristine backups. `restore` restores both `resources/app.asar` and
 `resources/app.asar.unpacked`, resets the Electron fuse, and removes the Python
-backup and manifest. The Pro option includes the C# patcher's native mobile
+backup and manifest. It also restores any embedded ASAR integrity hash changed
+in the executable. The Pro option includes the C# patcher's native mobile
 pairing safeguard, which disables Wand's native pairing request.
 Patch and restore commands print timestamped progress in the terminal, including
 backups, individual JavaScript edits, archive writing, the auxiliary trust edit,
-the fuse change, and rollback if an operation fails.
+the fuse change, the embedded ASAR hash, and rollback if an operation fails.
 
 The Python tool requires an unmodified installation for its first patch. If
 the C# patcher was used, restore with that tool first. An incomplete Python
 patch leaves its backups and `.incomplete-patch` marker so `restore` can recover
 the installation. If the Wand executable changed after patching, restore may
-reject its fuse backup; restore the matching executable or reinstall Wand.
+reject its integrity backups; restore the matching executable or reinstall Wand.
