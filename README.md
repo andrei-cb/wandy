@@ -1,7 +1,8 @@
-# Python Wand patcher
+# wandy
 
-Patch Wand/WeMod on Windows with Python 3.11+: Pro activation, disabled update
-checks, and F12 DevTools.
+Standalone Windows CLI utility (Python 3.11+) for customizing local Wand
+installations: removes client-side UI limitations, disables automatic update
+checks, and enables F12 DevTools.
 
 ## Setup
 
@@ -9,8 +10,9 @@ checks, and F12 DevTools.
 python -m pip install -r requirements.txt
 ```
 
-Close Wand before patching or restoring. Start with an unmodified installation;
-if you used the C# patcher, restore with that tool first.
+Close the application completely before patching or restoring. Start from an
+unmodified installation; if another patcher was used previously, restore with
+that tool first.
 
 ## Commands
 
@@ -21,13 +23,13 @@ python wandy.py patch --patch pro --patch disable-updates --patch devtools
 python wandy.py restore
 ```
 
-`patch` defaults to Pro; repeat `--patch` to select exactly the options you want.
-Run it again to change your selection. Reapply patches after Wand updates.
+`patch` defaults to removing client-side limitations (`pro`). Repeat `--patch`
+to select the exact options you want, or run it again to change your selection.
+Reapply patches after application updates.
 
-The newest local installation is detected automatically. To choose another,
-add `--install "C:\Users\you\AppData\Local\Wand\app-1.2.3"` to any command.
+The newest local installation is detected automatically. To target a specific
+versioned folder, pass `--install "C:\Users\you\AppData\Local\Wand\app-1.2.3"`
+to any command.
 
-If a patch fails, run `restore`. If restoration rejects a changed executable,
-restore the matching executable or reinstall Wand.
-
-Based on https://github.com/k1tbyte/Wand-Enhancer
+If a patch fails, run `restore`. If restoration rejects a modified executable,
+restore the matching executable or reinstall the application.
