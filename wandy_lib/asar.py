@@ -97,9 +97,9 @@ class Archive:
             if size < 0 or offset < 0 or self.data_offset + offset + size > archive_size:
                 raise PatchError(f"ASAR file lies outside archive: {name}")
             result.append((name, node, offset, size))
-        result.sort(key=lambda row: row[2])
+        result.sort(key=lambda row: (row[2], row[3]))
         for before, after in zip(result, result[1:]):
-            if before[2] + before[3] > after[2]:
+            if before[2] + before[3] > after[2] and (before[2], before[3]) != (after[2], after[3]):
                 raise PatchError(f"Overlapping ASAR file data: {before[0]} and {after[0]}")
         return result
 
@@ -199,18 +199,29 @@ def rewrite_archive(source: Path, destination: Path, unpacked_root: Path,
             promoted.add(name)
 
     next_offset = 0
-    for name, node, _, _ in packed:
+    written_slices: dict[tuple[int, int], int] = {}
+    writes: list[tuple[str, int, int]] = []
+    for name, node, old_offset, old_size in packed:
         if name in promoted:
             continue
-        node["offset"] = str(next_offset)
-        next_offset += len(changed[name]) if name in changed else int(node["size"])
+        if name in changed:
+            node["offset"] = str(next_offset)
+            next_offset += len(changed[name])
+            writes.append((name, old_offset, old_size))
+        else:
+            key = (old_offset, old_size)
+            if key in written_slices:
+                node["offset"] = str(written_slices[key])
+            else:
+                written_slices[key] = next_offset
+                node["offset"] = str(next_offset)
+                next_offset += int(node["size"])
+                writes.append((name, old_offset, old_size))
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     with source.open("rb") as original, destination.open("wb") as output:
         output.write(_pickle_header(archive.header))
-        for name, _, old_offset, old_size in packed:
-            if name in promoted:
-                continue
+        for name, old_offset, old_size in writes:
             if name in changed:
                 output.write(changed[name])
             else:
